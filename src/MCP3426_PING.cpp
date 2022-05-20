@@ -2,8 +2,6 @@
 #include <Arduino.h>
 #include "MCP3426_PING.h"
 
-//uint8_t MCP3426_CONFIG_CH1  = 0x18; // set channel 1 as source 0001 1000
-//uint8_t MCP3426_CONFIG_CH2  = 0x38; // set channel 2 as source 0011 1000
 uint8_t MCP3426_CONFIG_CH1  = 0B01111000;
 uint8_t MCP3426_CONFIG_CH2  = 0B00011000;
 uint8_t MCP3426_I2C_ADDRESS = 0x69; // 0110 1001
@@ -12,22 +10,23 @@ uint8_t MCP3426_I2C_ADDRESS = 0x69; // 0110 1001
 // its configuration, so we have to re-configure it
 // every time we start up
 //
-// this function should be called once in your setup() loop
+// you don't need to call this function, but you can
+// in your setup() loop and use it to determine if the
+// MCP3426 is connected and working correctly
 bool initializeMCP3426(int channel=1) {
     bool ret = false;
-	Wire.beginTransmission(MCP3426_I2C_ADDRESS);
+    Wire.beginTransmission(MCP3426_I2C_ADDRESS);
 
     if (channel == 2) {
         Wire.write((byte)MCP3426_CONFIG_CH2);
     }
-    else if (channel == 1){
-		Wire.write((byte)MCP3426_CONFIG_CH1); // default to channel 1
-	}
+    else if (channel == 1) {
+        Wire.write((byte)MCP3426_CONFIG_CH1); // default to channel 1
+    }
 	
     byte error = Wire.endTransmission();
-    if(error == 0) { ret = true; }
-    else { ret = false; }
-	return ret;
+    ret = error == 0; // return FALSE if failed to initialize
+    return ret;
 }
 
 /*
@@ -40,7 +39,7 @@ CONFIG BYTE DEFINITION:
 1,0 = G1,G0 = Gain selection (00=x1, 01=x2, 10=x4, 11=x8)  
 */
 uint8_t readMCP3426Config() {
-	int16_t  full_reading   = 0xDEAD;
+    int16_t  full_reading   = 0xDEAD;
     uint8_t  config_reading = 0xFF;
     uint8_t  sign           = 0x00;
 	
@@ -123,10 +122,10 @@ int16_t readMCP3426CurrentBits(int channel=1) {
 }
 
 double readMCP3426CurrentVoltage(int channel=1) {
-	int16_t  full_reading   = 0xDEAD;
+    int16_t  full_reading   = 0xDEAD;
     uint8_t  config_reading = 0x00;
     uint8_t  sign           = 0x00;
-	double   voltage        = -999; // can check for -999 returned to mean status = FAIL
+    double   voltage        = -999; // can check for -999 returned to mean status = FAIL
 	
     full_reading = readMCP3426CurrentBits(channel);
     
