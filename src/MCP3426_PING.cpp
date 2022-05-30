@@ -13,7 +13,7 @@ uint8_t MCP3426_I2C_ADDRESS = 0x69; // 0110 1001
 // you don't need to call this function, but you can
 // in your setup() loop and use it to determine if the
 // MCP3426 is connected and working correctly
-bool initializeMCP3426(int channel=1) {
+bool initializeMCP3426(int channel) {
     bool ret = false;
     Wire.beginTransmission(MCP3426_I2C_ADDRESS);
 
@@ -78,7 +78,7 @@ uint8_t readMCP3426Config() {
 	data is transmitted in 3 bytes, first 2 bytes are 16 bits of ADC data (WITH SIGN)
 	last byte is the 8 bit config packet
 */
-int16_t readMCP3426CurrentBits(int channel=1) {
+int16_t readMCP3426CurrentBits(int channel) {
     int16_t  full_reading   = 0xDEAD; // check for full_reading = 0xDEAD (0b1101 1110 1010 1101 // DEC 57,005)
 									  // to determine if a failure has occured during read operation
     uint8_t  config_reading = 0x00;
@@ -121,7 +121,7 @@ int16_t readMCP3426CurrentBits(int channel=1) {
     return full_reading; // full_reading will = 0xDEAD if a read failure occured
 }
 
-double readMCP3426CurrentVoltage(int channel=1) {
+double readMCP3426CurrentVoltage(int channel) {
     int16_t  full_reading   = 0xDEAD;
     uint8_t  config_reading = 0x00;
     uint8_t  sign           = 0x00;
