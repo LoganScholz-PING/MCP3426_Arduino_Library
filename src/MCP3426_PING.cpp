@@ -150,17 +150,28 @@ int16_t readMCP3426CurrentBits(int channel) {
 
 double readMCP3426CurrentVoltage(int channel) {
     int16_t  full_reading   = 0xDEAD;
-    uint8_t  config_reading = 0x00;
     uint8_t  sign           = 0x00;
     double   voltage        = -999; // can check for -999 returned to mean status = FAIL
 	
+	uint8_t current_config = readMCP3426Config();
+	if(current_config == 0xFF) return false; // config read failed
+	
     full_reading = readMCP3426CurrentBits(channel);
     
+	current_config = (current_config >> 2) & 0B00000011; // remove everything but the resolution data
+	
+	// ****** TODO: UPDATE VOLTAGE MATH FOR 12, 14, 16 bit resolutions
+	// 00 = 12 bit = 1 mV per division @ 12 bit resolution
+	// 01 = 14 bit = 250uV per division @ 14 bit resolution
+	// 10 = 16 bit = 62.5uV per division @ 16 bit resolution 
+	
     sign = full_reading >> 15;
     if (sign == 0x1) { /* voltage returned will be -999 if we somehow measure a negative voltage on the ADC */ }
     else {
-        voltage = (double)full_reading * 0.0000625; // 62.5uV per division @ gain = 1x
-    }
+		if(current_config == 0B00000000)      { voltage = (double)full_reading * 0.001;     }  // 1mV per division @ 12 bit
+		else if(current_config == 0B00000001) { voltage = (double)full_reading * 0.000250;  }  // 250uV per division @ 14 bit
+		else if(current_config == 0B00000010) { voltage = (double)full_reading * 0.0000625; }  // 62.5uV per division @ 16 bit
+	}
     return voltage; // can check for -999 returned to mean status = FAIL
 }
 
