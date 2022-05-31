@@ -3,34 +3,43 @@
 #include "MCP3426_PING.h"
 
 /*
-TODO: how chip is initialized is bad, de-couple
-setting channel in every function call, use a 
-default config register setting then let the user
-change the different parameters. this means before
-we do anything we'll need to read the config register
-first.
+* Quick Start:
+1. call initializeMCP3426() [or initalizeMCP3426(channel)] in setup 
+	- default initialization: CH1, 16 bit resolution, continuous reading, x1 PGA
+2. read current channel value with readMCP3426CurrentBits(channel) or readMCP3426CurrentVoltage(channel)
+	- if no channel is given in the arguments, CH1 is default read
 
-how chip is initialized and how channels are selected
-needs to be re-thought out
-
+* Optional:
+3. change the configuration register at any time with the following functions:
+	- setMCP3426PGA
+	- setMCP3426Resolution
+	- setMCP3426ConversionMode
+	- setMCP3426ActiveChannel
 */
 
 
 
-uint8_t MCP3426_CONFIG_CH1  = 0B01111000;
-uint8_t MCP3426_CONFIG_CH2  = 0B00011000;
-uint8_t MCP3426_CONFIG_DEFAULT = 0B01111000; // ch1, 16 bit, continuous, x1 gain
-
-uint8_t MCP3426_CONFIG_UPDATE = 0B11111111;
-uint8_t MCP3426_I2C_ADDRESS = 0x69; // 0110 1001
-
+// Initializer
+//
 // every time the MCP3426 is power cycled it loses
 // its configuration, so we have to re-configure it
 // every time we start up
 //
-// you don't need to call this function, but you can
-// in your setup() loop and use it to determine if the
-// MCP3426 is connected and working correctly
+// default initializer, chooses channel 1 if no channel provided
+// [ch1, 16 bit, continuous, x1 gain]
+bool initializeMCP3426() {
+    bool ret = false;
+    Wire.beginTransmission(MCP3426_I2C_ADDRESS);
+	Wire.write((byte)MCP3426_CONFIG_DEFAULT); // default to channel 1
+    byte error = Wire.endTransmission();
+    ret = error == 0; // return FALSE if failed to initialize
+    return ret;
+}
+
+// Initializer
+//
+// if channel is provided, initialize with user-defined channel
+// [16 bit, continuous, x1 gain]
 bool initializeMCP3426(int channel) {
     bool ret = false;
     Wire.beginTransmission(MCP3426_I2C_ADDRESS);
@@ -47,6 +56,7 @@ bool initializeMCP3426(int channel) {
     return ret;
 }
 
+// helper function to update config after user-triggered updates
 bool updateMCP3426Config(byte new_config) {
 	bool ret = false;
     Wire.beginTransmission(MCP3426_I2C_ADDRESS);
@@ -111,17 +121,7 @@ int16_t readMCP3426CurrentBits(int channel) {
     uint8_t  config_reading = 0x00;
     uint8_t  sign           = 0x00;
 	
-    // set channel to read from (default is channel 1)
-    if (channel == 1) {
-        if (!initializeMCP3426(1)) {
-            return full_reading; // 0xDEAD
-        }
-    }
-    else if (channel == 2) {
-        if (!initializeMCP3426(2)) {
-            return full_reading;
-        }
-    }
+	if(!setMCP3426ActiveChannel(channel)) return full_reading; // 0xDEAD
 
     Wire.requestFrom(MCP3426_I2C_ADDRESS, (uint8_t)3); // request 3 bytes from the MCP3426 (16 bit value + config)
 
@@ -166,7 +166,6 @@ double readMCP3426CurrentVoltage(int channel) {
 
 
 bool setMCP3426PGA(MCP3426_PGA_MODE mode) {
-	// TODO
 	// 00 = x1
 	// 01 = x2
 	// 10 = x4
@@ -202,7 +201,6 @@ bool setMCP3426PGA(MCP3426_PGA_MODE mode) {
 }
 
 bool setMCP3426Resolution(MCP3426_RESOLUTION_MODE mode) {
-	// TODO
 	// AKA RATE
 	// 00 = 12 bit
 	// 01 = 14 bit
@@ -234,7 +232,6 @@ bool setMCP3426Resolution(MCP3426_RESOLUTION_MODE mode) {
 }
 
 bool setMCP3426ConversionMode(MCP3426_CONVERSION_MODE mode) {
-	// TODO
 	// continuous or oneshot
 	// 1 = Continuous
 	// 0 = One Shot
@@ -261,20 +258,20 @@ bool setMCP3426ConversionMode(MCP3426_CONVERSION_MODE mode) {
 	return true;
 }
 
-bool setMCP3426ActiveChannel(MCP3426_CHANNEL mode) {
-	// TODO
+bool setMCP3426ActiveChannel(int channel) {
 	// CH1 or CH2
 	// 11 = CH1
 	// 00 = CH2
 	// config mask: 01100000
 	uint8_t mask = 0B10011111;
+	uint8_t current_config = readMCP3426Config();
 	if(current_config == 0xFF) return false; // config read failed
 	current_config &= mask; // use switch() to OR in correct bits now
-	switch(mode) {
-		case(CH1):
+	switch(channel) {
+		case(1):
 			current_config |= 0B01100000;
 			break;
-		case(CH2):
+		case(2):
 			current_config |= 0B00000000;
 			break;
 		default:
