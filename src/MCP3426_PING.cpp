@@ -2,8 +2,26 @@
 #include <Arduino.h>
 #include "MCP3426_PING.h"
 
+/*
+TODO: how chip is initialized is bad, de-couple
+setting channel in every function call, use a 
+default config register setting then let the user
+change the different parameters. this means before
+we do anything we'll need to read the config register
+first.
+
+how chip is initialized and how channels are selected
+needs to be re-thought out
+
+*/
+
+
+
 uint8_t MCP3426_CONFIG_CH1  = 0B01111000;
 uint8_t MCP3426_CONFIG_CH2  = 0B00011000;
+uint8_t MCP3426_CONFIG_DEFAULT = 0B01111000; // ch1, 16 bit, continuous, x1 gain
+
+uint8_t MCP3426_CONFIG_UPDATE = 0B11111111;
 uint8_t MCP3426_I2C_ADDRESS = 0x69; // 0110 1001
 
 // every time the MCP3426 is power cycled it loses
@@ -16,7 +34,7 @@ uint8_t MCP3426_I2C_ADDRESS = 0x69; // 0110 1001
 bool initializeMCP3426(int channel) {
     bool ret = false;
     Wire.beginTransmission(MCP3426_I2C_ADDRESS);
-
+	
     if (channel == 2) {
         Wire.write((byte)MCP3426_CONFIG_CH2);
     }
@@ -25,6 +43,15 @@ bool initializeMCP3426(int channel) {
     }
 	
     byte error = Wire.endTransmission();
+    ret = error == 0; // return FALSE if failed to initialize
+    return ret;
+}
+
+bool updateMCP3426Config(byte new_config) {
+	bool ret = false;
+    Wire.beginTransmission(MCP3426_I2C_ADDRESS);
+	Wire.write(new_config);
+	byte error = Wire.endTransmission();
     ret = error == 0; // return FALSE if failed to initialize
     return ret;
 }
@@ -135,4 +162,125 @@ double readMCP3426CurrentVoltage(int channel) {
         voltage = (double)full_reading * 0.0000625; // 62.5uV per division @ gain = 1x
     }
     return voltage; // can check for -999 returned to mean status = FAIL
+}
+
+
+bool setMCP3426PGA(MCP3426_PGA_MODE mode) {
+	// TODO
+	// 00 = x1
+	// 01 = x2
+	// 10 = x4
+	// 11 = x8
+	// config mask: 00000011
+	uint8_t mask = 0B11111100;
+	uint8_t current_config = readMCP3426Config();
+	
+	if(current_config == 0xFF) return false; // config read failed
+	
+	current_config &= mask; // use switch() to OR in correct bits now
+	
+	switch(mode) {
+		case(TIMES_1):
+			current_config |= 0B00000000;
+			break;
+		case(TIMES_2):
+			current_config |= 0B00000001;
+			break;
+		case(TIMES_4):
+			current_config |= 0B00000010;
+			break;
+		case(TIMES_8):
+			current_config |= 0B00000011;
+			break;
+		default:
+		    return false;
+			break;
+	}
+	
+	updateMCP3426Config(current_config);
+	return true;
+}
+
+bool setMCP3426Resolution(MCP3426_RESOLUTION_MODE mode) {
+	// TODO
+	// AKA RATE
+	// 00 = 12 bit
+	// 01 = 14 bit
+	// 10 = 16 bit
+	// config mask: 00001100
+	uint8_t mask = 0B11110011;
+	uint8_t current_config = readMCP3426Config();
+	
+	if(current_config == 0xFF) return false; // config read failed
+	
+	current_config &= mask; // use switch() to OR in correct bits now
+	
+	switch(mode) {
+		case(TWELVE_BIT):
+			current_config |= 0B00000000;
+			break;
+		case(FOURTEEN_BIT):
+			current_config |= 0B00000100;
+			break;
+		case(SIXTEEN_BIT):
+			current_config |= 0B00001000;
+			break;
+		default:
+			return false;
+			break;
+	}
+	updateMCP3426Config(current_config);
+	return true;
+}
+
+bool setMCP3426ConversionMode(MCP3426_CONVERSION_MODE mode) {
+	// TODO
+	// continuous or oneshot
+	// 1 = Continuous
+	// 0 = One Shot
+	// config mask: 00010000
+	uint8_t mask = 0B11101111;
+	uint8_t current_config = readMCP3426Config();
+	
+	if(current_config == 0xFF) return false; // config read failed
+	
+	current_config &= mask; // use switch() to OR in correct bits now
+	
+	switch(mode) {
+		case(CONTINUOUS):
+			current_config |= 0B00010000;
+			break;
+		case(ONESHOT):
+			current_config |= 0B00000000;
+			break;
+		default:
+			return false;
+			break;
+	}
+	updateMCP3426Config(current_config);
+	return true;
+}
+
+bool setMCP3426ActiveChannel(MCP3426_CHANNEL mode) {
+	// TODO
+	// CH1 or CH2
+	// 11 = CH1
+	// 00 = CH2
+	// config mask: 01100000
+	uint8_t mask = 0B10011111;
+	if(current_config == 0xFF) return false; // config read failed
+	current_config &= mask; // use switch() to OR in correct bits now
+	switch(mode) {
+		case(CH1):
+			current_config |= 0B01100000;
+			break;
+		case(CH2):
+			current_config |= 0B00000000;
+			break;
+		default:
+			return false;
+			break;
+	}
+	updateMCP3426Config(current_config);
+	return true;
 }
