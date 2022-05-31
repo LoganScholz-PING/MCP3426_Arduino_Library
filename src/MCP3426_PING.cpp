@@ -17,7 +17,10 @@
 	- setMCP3426ActiveChannel
 */
 
-
+uint8_t MCP3426_CONFIG_CH1     = 0B01111000;
+uint8_t MCP3426_CONFIG_CH2     = 0B00011000;
+uint8_t MCP3426_CONFIG_DEFAULT = 0B01111000; // ch1, 16 bit, continuous, x1 gain
+uint8_t MCP3426_I2C_ADDRESS    = 0x69;       // 0110 1001
 
 // Initializer
 //
@@ -123,41 +126,55 @@ int16_t readMCP3426CurrentBits(int channel) {
 	
 	if(!setMCP3426ActiveChannel(channel)) return full_reading; // 0xDEAD
 
-    Wire.requestFrom(MCP3426_I2C_ADDRESS, (uint8_t)3); // request 3 bytes from the MCP3426 (16 bit value + config)
+	int error_count = 0;
+	bool read_complete = false;
+	while((error_count <= 250) && (read_complete == false)) {
+		// don't sample output register until O/C bit (bit 7) is = 0
+		// in my testing it took (worst case) about 150 loop iterations for O/C to be ready at 16 bit conversion mode
+		Wire.requestFrom(MCP3426_I2C_ADDRESS, (uint8_t)3); // request 3 bytes from the MCP3426 (16 bit value + config)
 
-    if(Wire.available()) {
-        byte count = 0x0;
-        while(Wire.available()) {
-            uint8_t temp_8_bits = Wire.read(); // read 1 byte at a time until 3 bytes are read
-            if (count == 0x0) {
-                full_reading = (int16_t)temp_8_bits;
-                full_reading = full_reading << 8; // left shift this first 8 bits to make room for lower 8 bits
-            }
-            else if (count == 0x1) {
-                full_reading |= (int16_t)temp_8_bits; // fill in the last 8 bits of the 16 bit ADC reading
-            }
-            else {
-                config_reading = temp_8_bits;
-            }
-            count += 0x1;
-        }
-    }
-    else {
-        //Serial.println(F("[ERROR] MCP3426 DID NOT RESPOND TO REQUEST."));
-    }
-    return full_reading; // full_reading will = 0xDEAD if a read failure occured
+		if(Wire.available()) {
+			byte count = 0x0;
+			while(Wire.available()) {
+				uint8_t temp_8_bits = Wire.read(); // read 1 byte at a time until 3 bytes are read
+				if (count == 0x0) {
+					full_reading = (int16_t)temp_8_bits;
+					full_reading = full_reading << 8; // left shift this first 8 bits to make room for lower 8 bits
+				}
+				else if (count == 0x1) {
+					full_reading |= (int16_t)temp_8_bits; // fill in the last 8 bits of the 16 bit ADC reading
+				}
+				else {
+					config_reading = temp_8_bits;
+				}
+				count += 0x1;
+			}
+			// only capture the reading if the ready bit was 0
+			uint8_t ready_bit = config_reading & 0B10000000; // RDY = 0 if ready to read, 1 if not ready to read
+			// if ready_bit == 0x0 we have hopefully captured the most recent voltage reading
+			if(ready_bit == 0x0) { read_complete = true; /* Serial.print(F("*****DEBUG ready_bit found at error_count = ")); Serial.println(error_count); */ }
+		}
+		else {
+			//Serial.println(F("[ERROR] MCP3426 DID NOT RESPOND TO REQUEST."));
+		}
+			
+		error_count++;
+	}
+	
+	if(read_complete) return full_reading;
+	else return 0xDEAD;
 }
 
 double readMCP3426CurrentVoltage(int channel) {
     int16_t  full_reading   = 0xDEAD;
     uint8_t  sign           = 0x00;
     double   voltage        = -999; // can check for -999 returned to mean status = FAIL
-	
+
+    full_reading = readMCP3426CurrentBits(channel);
+    
 	uint8_t current_config = readMCP3426Config();
 	if(current_config == 0xFF) return false; // config read failed
 	
-    full_reading = readMCP3426CurrentBits(channel);
-    
 	current_config = (current_config >> 2) & 0B00000011; // remove everything but the resolution data
 	
 	// ****** TODO: UPDATE VOLTAGE MATH FOR 12, 14, 16 bit resolutions
@@ -169,7 +186,7 @@ double readMCP3426CurrentVoltage(int channel) {
     if (sign == 0x1) { /* voltage returned will be -999 if we somehow measure a negative voltage on the ADC */ }
     else {
 		if(current_config == 0B00000000)      { voltage = (double)full_reading * 0.001;     }  // 1mV per division @ 12 bit
-		else if(current_config == 0B00000001) { voltage = (double)full_reading * 0.000250;  }  // 250uV per division @ 14 bit
+		else if(current_config == 0B00000001) { voltage = (double)full_reading * 0.000250;  }  // 250uV per division @ 14 bit 
 		else if(current_config == 0B00000010) { voltage = (double)full_reading * 0.0000625; }  // 62.5uV per division @ 16 bit
 	}
     return voltage; // can check for -999 returned to mean status = FAIL
@@ -274,21 +291,24 @@ bool setMCP3426ActiveChannel(int channel) {
 	// 11 = CH1
 	// 00 = CH2
 	// config mask: 01100000
+	//uint8_t mask = 0B10011111;
 	uint8_t mask = 0B10011111;
 	uint8_t current_config = readMCP3426Config();
 	if(current_config == 0xFF) return false; // config read failed
 	current_config &= mask; // use switch() to OR in correct bits now
+	
 	switch(channel) {
 		case(1):
-			current_config |= 0B01100000;
+			current_config |= 0B01000000;
 			break;
 		case(2):
-			current_config |= 0B00000000;
+			current_config |= 0B01100000;
 			break;
 		default:
 			return false;
 			break;
 	}
+	
 	updateMCP3426Config(current_config);
 	return true;
 }
