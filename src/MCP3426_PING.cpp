@@ -81,7 +81,7 @@ CONFIG BYTE DEFINITION:
 uint8_t readMCP3426Config() {
     int16_t  full_reading   = 0xDEAD;
     uint8_t  config_reading = 0xFF;
-    uint8_t  sign           = 0x00;
+    //uint8_t  sign           = 0x00;
 	
     Wire.requestFrom(MCP3426_I2C_ADDRESS, (uint8_t)3);
 
@@ -121,15 +121,15 @@ uint8_t readMCP3426Config() {
 int16_t readMCP3426CurrentBits(int channel) {
     int16_t  full_reading   = 0xDEAD; // check for full_reading = 0xDEAD (0b1101 1110 1010 1101 // DEC 57,005)
 									  // to determine if a failure has occured during read operation
-    uint8_t  config_reading = 0x00;
-    uint8_t  sign           = 0x00;
+    //uint8_t  config_reading = 0x00;
+    //uint8_t  sign           = 0x00;
 	
 	if(!setMCP3426ActiveChannel(channel)) return full_reading; // 0xDEAD
 
 	Wire.requestFrom(MCP3426_I2C_ADDRESS, (uint8_t)3); // request 3 bytes from the MCP3426 (16 bit value + config)
 
-	if(Wire.available() && count < 0x03) {
-		byte count = 0x0;
+	byte count = 0x0;
+	if(Wire.available() && count < 0x03) {		
 		while(Wire.available()) {
 			uint8_t temp_8_bits = Wire.read(); // read 1 byte at a time until 3 bytes are read
 			if (count == 0x0) {
@@ -139,7 +139,7 @@ int16_t readMCP3426CurrentBits(int channel) {
 			else if (count == 0x1) {
 				full_reading |= (int16_t)temp_8_bits; // fill in the last 8 bits of the 16 bit ADC reading
 			}
-			else { config_reading = temp_8_bits; }
+			else { /* config_reading = temp_8_bits; */ }
 			count += 0x1;
 		}
 	}
@@ -281,25 +281,26 @@ bool setMCP3426ActiveChannel(int channel) {
 	
 	switch(channel) {
 		case(1):
-			current_config |= 0B01000000;
+			current_config |= 0B00000000;
 			break;
 		case(2):
-			current_config |= 0B01100000;
+			current_config |= 0B00100000;
 			break;
 		default:
 			return false;
 			break;
 	}
-	
 	updateMCP3426Config(current_config);
 	return true;
 }
 
-bool checkMCP3426DataReadyBit() {
-	int16_t  full_reading   = 0xDEAD;
+bool checkMCP3426ChannelDataReady(int channel) {
+	//int16_t  full_reading   = 0xDEAD;
     uint8_t  config_reading = 0xFF;
-    uint8_t  sign           = 0x00;
+    //uint8_t  sign           = 0x00;
 	bool ret                = false;
+
+	if(!setMCP3426ActiveChannel(channel)) return false;
 
 	Wire.requestFrom(MCP3426_I2C_ADDRESS, (uint8_t)3); // request 3 bytes from the MCP3426 (16 bit value + config)
 

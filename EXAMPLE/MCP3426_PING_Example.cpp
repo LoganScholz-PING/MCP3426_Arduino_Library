@@ -1,5 +1,5 @@
 #include <Arduino.h>
-#include <Wire.h> //include Wire.h library
+#include <Wire.h>
 #include <MCP3426_PING.h>
 
 void delaySafeMillis(unsigned long timeToWait) {
@@ -13,51 +13,151 @@ void setup() {
   Serial.begin(57600);
   while (!Serial); // Waiting for Serial Monitor
   
-  Serial.println(F("[INFO] Welcome MCP3426 Communication Utility. Sending Config Packet..."));
-  if(!initializeMCP3426()) for(;;) // couldn't init MCP3426 so we're done here
-	                           // NOTE that calling initializeMCP3426() with no parameters 
-	                           // sets channel 1 as default read channel
-	                           // call initalizeMCP3426(1); to set config to auto read channel 1
-	                           // call initalizeMCP3426(2); to set config to auto read channel 2
-	                           // - you don't NEED to initialize though, readMCP3426([channel here]) writes config packet
-  
+  Serial.println(F("[INFO] Welcome MCP3426 Communication Utility. Sending Initialization Packet..."));
+
+  delayMicroseconds(300); // datasheet for MCP3426 says 300us for settle time
+  if(!initializeMCP3426()) for(;;); // couldn't init MCP3426 so we're done here
+  //if(!initializeMCP3426(2)) for(;;); // TEST FOR CHANNEL 2 INITIALIZATION
+
   delaySafeMillis(100); // give MCP3426 some time to settle
 }
 
+void channel_default_init_test() {
+  while(!checkMCP3426ChannelDataReady()) { /* wait for data to become available */ }
+  int16_t def_full_reading = readMCP3426CurrentBits();
+  double  def_voltage      = readMCP3426CurrentVoltage();
+  uint8_t def_config       = readMCP3426Config();
+  Serial.println(F("*************** DEFAULT INITIALIZATION ***************"));
+  Serial.print(F("[INFO] Config = 0B"));
+  Serial.print(def_config, BIN);
+  Serial.print(F(" // Full Reading = 0x"));
+  Serial.print(def_full_reading, HEX);
+  Serial.print(F(" // Voltage = "));
+  Serial.print(def_voltage);
+  Serial.println(F(" Volts"));
+}
+
+void channel_1_test() {
+  unsigned long start_time = micros();
+  while(!checkMCP3426ChannelDataReady(1)) { /* wait for data to become available */ }
+  unsigned long finish_time = micros();
+  unsigned long delta = finish_time - start_time;
+  int16_t ch1_full_reading = readMCP3426CurrentBits(1);
+  double  ch1_voltage      = readMCP3426CurrentVoltage(1);
+  uint8_t ch1_config       = readMCP3426Config();
+  Serial.print(F("*************** CHANNEL 1 ("));
+  Serial.print(delta, DEC);
+  Serial.println(F(" microseconds) ***************"));
+  Serial.print(F("[INFO] Config = 0B"));
+  Serial.print(ch1_config, BIN);
+  Serial.print(F(" // Full Reading = 0x"));
+  Serial.print(ch1_full_reading, HEX);
+  Serial.print(F(" // Voltage = "));
+  Serial.print(ch1_voltage);
+  Serial.println(F(" Volts"));
+}
+
+void channel_2_test() {
+  unsigned long start_time = micros();
+  while(!checkMCP3426ChannelDataReady(2)) { /* wait for data to become available */ }
+  unsigned long end_time = micros();
+  int16_t ch2_full_reading = readMCP3426CurrentBits(2);
+  double  ch2_voltage      = readMCP3426CurrentVoltage(2);
+  uint8_t ch2_config       = readMCP3426Config();
+  unsigned long delta = end_time - start_time;
+  Serial.print(F("*************** CHANNEL 2 ("));
+  Serial.print(delta, DEC);
+  Serial.println(F(" microseconds) ***************"));
+
+  Serial.print(F("[INFO] Config = 0B"));
+  Serial.print(ch2_config, BIN);
+  Serial.print(F(" // Full Reading = 0x"));
+  Serial.print(ch2_full_reading, HEX);
+  Serial.print(F(" // Voltage = "));
+  Serial.print(ch2_voltage);
+  Serial.println(F(" Volts"));
+}
+
+void print_current_config_nice() {
+  uint8_t config_reading = readMCP3426Config();
+  Serial.print(F("  -->  CURRENT CONFIG REGISTER: 0B"));
+  Serial.println(config_reading, BIN);
+}
+
+void config_test() {
+  Serial.println(F("CONFIG @ START OF CONFIG TEST ... "));
+  print_current_config_nice();
+
+  //
+  Serial.println();
+  Serial.println(F("Set MCP3426_PGA_MODE::TIMES_2 ... "));
+  setMCP3426PGA(MCP3426_PGA_MODE::TIMES_2);
+  print_current_config_nice();
+
+  Serial.println(F("Set MCP3426_PGA_MODE::TIMES_4 ... "));
+  setMCP3426PGA(MCP3426_PGA_MODE::TIMES_4);
+  print_current_config_nice();
+
+  Serial.println(F("Set MCP3426_PGA_MODE::TIMES_8 ... "));
+  setMCP3426PGA(MCP3426_PGA_MODE::TIMES_8);
+  print_current_config_nice();
+
+  Serial.println(F("Set MCP3426_PGA_MODE::TIMES_1 ... "));
+  setMCP3426PGA(MCP3426_PGA_MODE::TIMES_1);
+  print_current_config_nice();
+
+  //
+  Serial.println();
+  Serial.println(F("Set MCP3426_CONVERSION_MODE::ONESHOT ... "));
+  setMCP3426ConversionMode(MCP3426_CONVERSION_MODE::ONESHOT);
+  print_current_config_nice();
+
+  Serial.println(F("Set MCP3426_CONVERSION_MODE::CONTINUOUS ... "));
+  setMCP3426ConversionMode(MCP3426_CONVERSION_MODE::CONTINUOUS);
+  print_current_config_nice();
+
+  //
+
+  Serial.println();
+  Serial.println(F("Set MCP3426_RESOLUTION_MODE::TWELVE_BIT ... "));
+  setMCP3426Resolution(MCP3426_RESOLUTION_MODE::TWELVE_BIT);
+  print_current_config_nice();
+
+  Serial.println(F("Set MCP3426_RESOLUTION_MODE::FOURTEEN_BIT ... "));
+  setMCP3426Resolution(MCP3426_RESOLUTION_MODE::FOURTEEN_BIT);
+  print_current_config_nice();
+
+  Serial.println(F("Set MCP3426_RESOLUTION_MODE::SIXTEEN_BIT ... "));
+  setMCP3426Resolution(MCP3426_RESOLUTION_MODE::SIXTEEN_BIT);
+  print_current_config_nice();
+
+  //
+
+  Serial.println();
+  Serial.println(F("Set MCP3426 Channel 1 ... "));
+  setMCP3426ActiveChannel(1);
+  print_current_config_nice();
+
+  Serial.println(F("Set MCP3426 Channel 2 ... "));
+  setMCP3426ActiveChannel(2);
+  print_current_config_nice();
+
+  // now reset config
+  Serial.println();
+  Serial.println(F("Resetting MCP3426 Config Register to Default ... "));
+  initializeMCP3426();
+  print_current_config_nice();
+}
+
+int main_delay = 2000;
 void loop() {
-  // READ CHANNEL 1 AND PRINT
-  Serial.println("*********************************");
-  Serial.println("*********************************");
-
-  int16_t full_reading_ch1 = readMCP3426CurrentBits(1);
-  double voltage_ch1 = readMCP3426CurrentVoltage(1);
-  uint8_t config_ch1 = readMCP3426Config();
-  Serial.print(F("[INFO] CH1 Config = 0x"));
-  Serial.print(config_ch1, HEX);
-  Serial.print(F(" (0B"));
-  Serial.print(config_ch1, BIN);
-  Serial.print(F(") // CH1 Full Reading = 0x"));
-  Serial.print(full_reading_ch1, HEX);
-  Serial.print(F(" // CH1 Voltage = "));
-  Serial.print(voltage_ch1);
-  Serial.println(F(" Volts"));
-
-  // READ CHANNEL 2 AND PRINT
-  delaySafeMillis(50); // don't need this
-
-  int16_t full_reading_ch2 = readMCP3426CurrentBits(2);
-  double voltage_ch2 = readMCP3426CurrentVoltage(2);
-  uint8_t config_ch2 = readMCP3426Config();
-
-  Serial.print(F("[INFO] CH2 Config = 0x"));
-  Serial.print(config_ch2, HEX);
-  Serial.print(F(" (0B"));
-  Serial.print(config_ch2, BIN);
-  Serial.print(F(") // CH2 Full Reading = 0x"));
-  Serial.print(full_reading_ch2, HEX);
-  Serial.print(F(" // CH2 Voltage = "));
-  Serial.print(voltage_ch2);
-  Serial.println(F(" Volts"));
-
-  delaySafeMillis(1000); // don't blow up our serial monitor
+  channel_1_test();
+  delaySafeMillis(main_delay);
+  Serial.println();
+  channel_2_test();
+  delaySafeMillis(main_delay);
+  Serial.println();
+  config_test();
+  delaySafeMillis(1000);
+  Serial.println();
 }
