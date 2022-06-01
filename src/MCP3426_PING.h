@@ -31,6 +31,7 @@ bool    setMCP3426PGA(MCP3426_PGA_MODE mode);
 bool    setMCP3426Resolution(MCP3426_RESOLUTION_MODE mode);
 bool    setMCP3426ConversionMode(MCP3426_CONVERSION_MODE mode);
 bool    setMCP3426ActiveChannel(int channel);
+bool    checkMCP3426DataReadyBit();
 
 #endif
 

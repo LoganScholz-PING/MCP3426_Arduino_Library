@@ -126,43 +126,25 @@ int16_t readMCP3426CurrentBits(int channel) {
 	
 	if(!setMCP3426ActiveChannel(channel)) return full_reading; // 0xDEAD
 
-	int error_count = 0;
-	bool read_complete = false;
-	while((error_count <= 250) && (read_complete == false)) {
-		// don't sample output register until O/C bit (bit 7) is = 0
-		// in my testing it took (worst case) about 150 loop iterations for O/C to be ready at 16 bit conversion mode
-		Wire.requestFrom(MCP3426_I2C_ADDRESS, (uint8_t)3); // request 3 bytes from the MCP3426 (16 bit value + config)
+	Wire.requestFrom(MCP3426_I2C_ADDRESS, (uint8_t)3); // request 3 bytes from the MCP3426 (16 bit value + config)
 
-		if(Wire.available()) {
-			byte count = 0x0;
-			while(Wire.available()) {
-				uint8_t temp_8_bits = Wire.read(); // read 1 byte at a time until 3 bytes are read
-				if (count == 0x0) {
-					full_reading = (int16_t)temp_8_bits;
-					full_reading = full_reading << 8; // left shift this first 8 bits to make room for lower 8 bits
-				}
-				else if (count == 0x1) {
-					full_reading |= (int16_t)temp_8_bits; // fill in the last 8 bits of the 16 bit ADC reading
-				}
-				else {
-					config_reading = temp_8_bits;
-				}
-				count += 0x1;
+	if(Wire.available() && count < 0x03) {
+		byte count = 0x0;
+		while(Wire.available()) {
+			uint8_t temp_8_bits = Wire.read(); // read 1 byte at a time until 3 bytes are read
+			if (count == 0x0) {
+				full_reading = (int16_t)temp_8_bits;
+				full_reading = full_reading << 8; // left shift this first 8 bits to make room for lower 8 bits
 			}
-			// only capture the reading if the ready bit was 0
-			uint8_t ready_bit = config_reading & 0B10000000; // RDY = 0 if ready to read, 1 if not ready to read
-			// if ready_bit == 0x0 we have hopefully captured the most recent voltage reading
-			if(ready_bit == 0x0) { read_complete = true; /* Serial.print(F("*****DEBUG ready_bit found at error_count = ")); Serial.println(error_count); */ }
+			else if (count == 0x1) {
+				full_reading |= (int16_t)temp_8_bits; // fill in the last 8 bits of the 16 bit ADC reading
+			}
+			else { config_reading = temp_8_bits; }
+			count += 0x1;
 		}
-		else {
-			//Serial.println(F("[ERROR] MCP3426 DID NOT RESPOND TO REQUEST."));
-		}
-			
-		error_count++;
 	}
-	
-	if(read_complete) return full_reading;
-	else return 0xDEAD;
+	else { /* Serial.println(F("[ERROR] MCP3426 DID NOT RESPOND TO REQUEST.")); */ }
+	return full_reading;
 }
 
 double readMCP3426CurrentVoltage(int channel) {
@@ -311,4 +293,30 @@ bool setMCP3426ActiveChannel(int channel) {
 	
 	updateMCP3426Config(current_config);
 	return true;
+}
+
+bool checkMCP3426DataReadyBit() {
+	int16_t  full_reading   = 0xDEAD;
+    uint8_t  config_reading = 0xFF;
+    uint8_t  sign           = 0x00;
+	bool ret                = false;
+
+	Wire.requestFrom(MCP3426_I2C_ADDRESS, (uint8_t)3); // request 3 bytes from the MCP3426 (16 bit value + config)
+
+	if(Wire.available()) {
+		byte count = 0x0;
+		while(Wire.available() && count < 0x03) {
+			uint8_t temp_8_bits = Wire.read(); // read 1 byte at a time until 3 bytes are read
+			if (count == 0x0) { /* skip high 8 bits of data value */	}
+			else if (count == 0x1) { /* skip low 8 bits of data value */	}
+			else { 
+				config_reading = temp_8_bits; 
+				uint8_t ready_bit = config_reading & 0B10000000; // RDY = 0 if ready to read, 1 if not ready to read
+				if(ready_bit == 0x0) { ret = true; }
+			}
+			count += 0x1;
+		}
+	}
+	else { /* return ret = false */ }
+	return ret;
 }
